@@ -1,0 +1,105 @@
+# whitelist.yaml
+version: 1
+default_timeout_seconds: 300
+
+tools:
+  nmap:
+    description: "Network scanner for reconnaissance (read-only)"
+    params:
+      - name: target
+        type: ip
+        required: true
+      - name: flags
+        type: enum
+        allowed:
+          - "-sV"
+          - "-sS"
+          - "-A"
+        required: false
+      - name: ports
+        type: ports
+        required: false
+    template: "nmap {flags} {ports} {target}"
+    requires_approval: false
+    notes: "Use for reconnaissance; safe."
+
+  ping:
+    description: "ICMP reachability check"
+    params:
+      - name: target
+        type: ip
+        required: true
+      - name: count
+        type: int
+        min: 1
+        max: 5
+        required: false
+    template: "ping -c {count} {target}"
+    requires_approval: false
+
+  tcpdump:
+    description: "Packet capture (read-only). Saves to /tmp on target."
+    params:
+      - name: interface
+        type: iface
+        allowed:
+          - "eth1"
+          - "enp0s8"
+          - "eth0"
+        required: true
+      - name: duration
+        type: int
+        min: 1
+        max: 300
+        required: false
+    template: "timeout {duration} tcpdump -i {interface} -c 200 -w /tmp/{interface}_capture.pcap"
+    requires_approval: false
+    notes: "Controller must retrieve pcap and delete it after analysis."
+
+  iptables:
+    description: "Host firewall changes (defensive)."
+    params:
+      - name: src
+        type: ip
+        required: true
+      - name: action
+        type: enum
+        allowed:
+          - "DROP"
+          - "REJECT"
+        required: true
+    template: "sudo iptables -A INPUT -s {src} -j {action}"
+    requires_approval: true
+    notes: "Requires snapshot and manual approval."
+
+  hydra:
+    description: "Password brute force Requires manual approval."
+    params:
+      - name: target
+        type: ip
+        required: true
+      - name: username
+        type: alnum
+        required: true
+      - name: wordlist
+        type: existing_path
+        allowed_paths:
+          - "/usr/share/wordlists/rockyou.txt"
+          - "/home/controller/wordlists/small.txt"
+        required: true
+      - name: max_attempts
+        type: int
+        min: 1
+        max: 1000
+        required: false
+    template: "hydra -l {username} -P {wordlist} -t 4 -V ssh://{target}"
+    requires_approval: true
+    notes: "Snapshot MUST be taken by a manual before approval. Rate-limit enforcement required."
+
+# helper param types (informational)
+_param_types:
+  ip: "IPv4 dotted quad only"
+  ports: "comma separated ports or ranges, e.g., 22,80 or 1-1024"
+  iface: "interface literal allowed above"
+  existing_path: "explicitly allowed paths only"
+  alnum: "alphanumeric (usernames/labels)"

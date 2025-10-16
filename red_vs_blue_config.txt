@@ -1,0 +1,25 @@
+hosts:
+  - name: red
+    role: red
+    ip: 192.168.60.2
+    user: red
+    password: "red"
+
+  - name: blue
+    role: blue
+    ip: 192.168.50.2
+    user: blue
+    password: "blue"
+
+  - name: controller_red
+    role: controller
+    ip: 192.168.60.3
+
+  - name: controller_blue
+    role: controller
+    ip: 192.168.50.3
+
+  - name: target_redblue
+    role: vm_network
+    ip_blue: 192.168.100.2
+    ip_red: 192.168.100.3
