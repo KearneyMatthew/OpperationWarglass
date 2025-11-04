@@ -1,6 +1,7 @@
 # OpperationWarglass
 This project attempts to use artificial intelligence to simulate a red-versus-blue computer battle, where red acts as a malicious actor seeking to gain access to or steal files from a blue server. In this simulation, the artificial intelligence would control the actions of the red virtual machine and then also control the blue virtual machine.
 
+
 aggregate_runs.py: This files job is to take in the files that are created by both virtual machines and adds them into a directory called run and then gives it a specialized names
 ai_agent_codellama.py: This is where the prompts are given to the artificial inteligence and then the responses are placed into json format and placed into a runnable command
 app.py: This is the interaction between the html file and the orchestrator_stub.py the point of this is to take in the inputs and places it to orchestrator_stub.py
