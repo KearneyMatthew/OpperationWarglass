@@ -1,0 +1,174 @@
+attack:
+  description: "Attacker flows from initial contact -> enumeration -> access/denial."
+  # Replace target_label values with actual IPs when orchestrating runs
+  hydra:
+    description: "SSH brute-force flow (hydra)."
+    target_label: "blue_vm"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Initial reachability check (ping blue_vm)."
+      - step: 2
+        name: nmap
+        action_desc: "Service discovery on_blue_vm (nmap)."
+      - step: 3
+        name: hydra
+        action_desc: "SSH brute-force attempt (hydra)."
+      - step: 4
+        name: check_privileges
+        action_desc: "Simulate checking user/account privileges after access."
+
+  ssh_bruteforce_variant:
+    description: "SSH brute-force variant — limited attempts on common usernames."
+    target_label: "blue_vm"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Initial reachability check (ping blue_vm)."
+      - step: 2
+        name: nmap
+        action_desc: "Service enumeration on blue_vm (nmap)."
+      - step: 3
+        name: ssh_bruteforce_variant
+        action_desc: "Limited-attempt SSH brute force against common usernames."
+      - step: 4
+        name: check_privileges
+        action_desc: "Simulate checking user/account privileges after access."
+
+  port80:
+    description: "HTTP enumeration/injection flow against web service."
+    target_label: "blue_vm"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Initial reachability check (ping blue_vm)."
+      - step: 2
+        name: nmap
+        action_desc: "Probe web service on port 80 (nmap -p 80 -sV)."
+      - step: 3
+        name: port80_attack
+        action_desc: "HTTP enumeration/injection (nmap/curl per whitelist)."
+      - step: 4
+        name: check_privileges
+        action_desc: "Simulate checking if web exploitation yielded access."
+
+  dos:
+    description: "Denial-of-Service flow to stress or deny services."
+    target_label: "blue_vm"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Initial reachability and latency check (ping)."
+      - step: 2
+        name: nmap
+        action_desc: "Map services to pick DoS targets (nmap)."
+      - step: 3
+        name: dos_attack
+        action_desc: "Simulated DoS stress test (hping3/ping or simulator)."
+
+purpose:
+  description: "Post-compromise objectives executed after Red VM has control of a host."
+  note: "These run after an attack sequence completes and control is achieved (or simulated success)."
+  default_target_label: "other_vm_or_subnet"
+
+  recon_additional_servers:
+    description: "Discover additional VMs/hosts beyond Blue (network scan)."
+    default_target_label: "other_vm_or_subnet"
+    steps:
+      - step: 1
+        name: recon_additional_servers
+        action_desc: "Run subnet discovery to locate additional hosts (prompts.yaml stage recon_additional_servers)."
+      - step: 2
+        name: ping
+        action_desc: "Ping discovered hosts to verify reachability."
+      - step: 3
+        name: nmap
+        action_desc: "Service enumeration on discovered hosts (nmap)."
+
+  capture_destroy_data:
+    description: "SIMULATION-ONLY: search, capture, and stage/send a named file (simulator)."
+    target_label: "red_vm"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Initial reachability check to target host (ping)."
+      - step: 2
+        name: capture_destroy_data
+        action_desc: "SIMULATION-ONLY: locate, capture and stage/send file (prompts.yaml stage capture_destroy_data)."
+      - step: 3
+        name: capture_destroy_file_simulation
+        action_desc: "Helper: simulate removal of the file from the target (prompts.yaml stage capture_destroy_file_simulation)."
+
+  close_port80_simulation:
+    description: "SIMULATION-ONLY: simulate closing/blocking HTTP (port 80) on target."
+    target_label: "blue_vm"
+    steps:
+      - step: 1
+        name: close_port80_simulation
+        action_desc: "SIMULATION-ONLY: simulate blocking or stopping HTTP on the target (prompts.yaml stage close_port80_simulation)."
+      - step: 2
+        name: deny_web_services
+        action_desc: "If needed, run deny_web_services (prompts.yaml stage) to emulate service denial."
+
+defense:
+  description: "Defensive reaction steps executed after each attack sequence (so defenses get time to detect and respond)."
+  note: "Orchestrator should run this sequence after every attack flow (hydra/port80/dos) to simulate detection & response."
+
+  intrusion_detection:
+    description: "Capture packet trace / run tcpdump to analyze traffic (intrusion detection)."
+    default_target_label: "defense"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Quick reachability check of the monitored host/network."
+      - step: 2
+        name: nmap
+        action_desc: "Scan to identify active services/ports before deeper analysis."
+      - step: 3
+        name: intrusion_detection
+        action_desc: "Run tcpdump/pcap capture (prompts.yaml stage intrusion_detection) to monitor suspicious traffic."
+      - step: 4
+        name: system_hardening
+        action_desc: "If malicious activity detected, trigger a hardening check."
+
+  system_hardening:
+    description: "OS hardening audit (nmap verification, close ports, config checks)."
+    default_target_label: "defense"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Verify host reachability."
+      - step: 2
+        name: nmap
+        action_desc: "Audit open services/ports."
+      - step: 3
+        name: system_hardening
+        action_desc: "Run system hardening stage (prompts.yaml stage system_hardening) to recommend/apply hardening steps."
+
+  sudo_harden:
+    description: "Simulate hardening / de-escalation of sudo privileges (simulator)."
+    default_target_label: "defense"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Verify reachability."
+      - step: 2
+        name: nmap
+        action_desc: "Optional: check for suspicious services."
+      - step: 3
+        name: sudo_harden
+        action_desc: "SIMULATION-ONLY: reduce or lock sudo rights on the target."
+
+  firewall_update:
+    description: "Optional: add iptables rules to block malicious sources or ports."
+    default_target_label: "defense"
+    steps:
+      - step: 1
+        name: ping
+        action_desc: "Verify reachability prior to rule changes."
+      - step: 2
+        name: firewall_update
+        action_desc: "Add/modify iptables rules (prompts.yaml stage firewall_update)."
+      - step: 3
+        name: intrusion_detection
+        action_desc: "Continue monitoring to confirm effectiveness of firewall rules."

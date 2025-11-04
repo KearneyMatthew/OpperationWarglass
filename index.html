@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cyber Range Simulation Dashboard</title>
+<style>
+  body { font-family: Arial, sans-serif; background:#0d1117; color:#e6edf3; margin:0; }
+  header { background:#161b22; padding:14px 20px; text-align:center; font-size:1.25rem; border-bottom:2px solid #30363d; }
+  nav { display:flex; justify-content:center; background:#111; }
+  nav button { background:none; color:#ccc; border:none; padding:12px 20px; cursor:pointer; }
+  nav button.active { background:#222; color:#fff; border-bottom:3px solid #238636; }
+  main { padding:20px; display:flex; gap:20px; }
+  .left { flex:3; }
+  .right { flex:1.2; }
+  .controls { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  select, button, input[type="file"] { background:#21262d; color:#fff; border:1px solid #333; padding:8px; border-radius:6px; }
+  button.primary { background:#238636; border:none; padding:9px 14px; cursor:pointer; }
+  .console { background:#000; color:#0f0; padding:12px; border-radius:6px; height:360px; overflow:auto; font-family:monospace; white-space:pre-wrap; border:1px solid #333; }
+  .desc { background:#161b22; padding:12px; border-radius:6px; border:1px solid #333; }
+  .logs-list { background:#111; padding:10px; border-radius:6px; border:1px solid #333; max-height:200px; overflow:auto; }
+  .logs-list button { display:block; width:100%; text-align:left; background:none; padding:8px; border:none; color:#9fe; cursor:pointer; }
+  .log-view { background:#000; padding:12px; border-radius:6px; height:240px; overflow:auto; color:#0f0; font-family:monospace; white-space:pre-wrap; border:1px solid #333; margin-top:10px; }
+  footer { text-align:center; padding:10px; color:#888; border-top:1px solid #333; margin-top:20px; }
+  .tab-page { display:none; }
+  .tab-page.active { display:block; }
+  .small { font-size:0.9rem; color:#9aa; }
+  .console-info { color:#0f0; }
+  .console-warn { color:#ff0; }
+  .console-error { color:#f33; }
+  .console-stage { color:#6cf; }
+  .console-complete { color:#0ff; }
+</style>
+</head>
+<body>
+
+<header>Operation WarGlass</header>
+
+<nav>
+  <button id="tab-sim" class="active" onclick="switchTab('sim')">Simulation</button>
+  <button id="tab-logs" onclick="switchTab('logs')">Logs</button>
+</nav>
+
+<main>
+  <!-- SIMULATION TAB -->
+  <section id="sim" class="tab-page active left">
+    <div class="controls">
+      <label>Attack
+        <select id="attack">
+          <option value="ping">Ping</option>
+          <option value="nmap">Nmap Scan</option>
+          <option value="hydra">Hydra SSH</option>
+          <option value="ssh_bruteforce_variant">SSH Brute Force Variant</option>
+          <option value="port80_attack">Port 80 Attack</option>
+          <option value="dos_attack">DoS Attack</option>
+        </select>
+      </label>
+
+      <label>Purpose
+        <select id="purpose">
+          <option value="recon_additional_servers">Recon Additional Servers</option>
+          <option value="capture_destroy_data">Capture/Destroy Data</option>
+          <option value="deny_web_services">Deny Web Services</option>
+        </select>
+      </label>
+
+      <label>Defense
+        <select id="defense">
+          <option value="firewall_update">Firewall Update</option>
+          <option value="intrusion_detection">Intrusion Detection</option>
+          <option value="system_hardening">System Hardening</option>
+        </select>
+      </label>
+
+      <button id="simulateBtn" class="primary">Simulate</button>
+      <div class="small" id="currentRun">No active run</div>
+    </div>
+
+    <div style="display:flex; gap:18px;">
+      <div style="flex:1;">
+        <div class="console" id="console">[Console initialized — no active run]</div>
+      </div>
+
+      <aside class="right" style="max-width:360px;">
+        <div class="desc" id="descBox">
+          <h3>Description</h3>
+          <div id="descText">Choose Attack / Purpose / Defense to see details here.</div>
+        </div>
+
+        <div style="margin-top:12px; font-size:0.9rem; color:#9aa;">
+          <b>Run actions:</b>
+          <div>- Click Simulate to start the simulated attack.</div>
+          <div>- Live output will stream to the console panel.</div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- LOGS TAB -->
+  <section id="logs" class="tab-page left">
+    <div style="display:flex; gap:20px;">
+      <div style="flex:2;">
+        <h3>Server-side Runs</h3>
+        <div class="logs-list" id="serverRuns">Loading...</div>
+        <div class="log-view" id="serverLog">Select a run to view the full logfile here.</div>
+      </div>
+
+      <div style="flex:1;">
+        <h3>Open Local Log</h3>
+        <input type="file" id="localFile" accept=".log,.txt" />
+        <div class="log-view" id="localLog">No local file loaded.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>Operation WarGlass: Report all bugs to developer</footer>
+
+<script>
+/* ---------- Tab handling ---------- */
+function switchTab(name) {
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+/* ---------- Description updates ---------- */
+const descriptions = {
+  ping: "Ping — test connectivity to target host.",
+  nmap: "Nmap Scan — detect open ports and services.",
+  hydra: "Hydra SSH — simulate SSH brute-force attack.",
+  ssh_bruteforce_variant: "SSH Brute Force Variant — limited attempts on common usernames.",
+  port80_attack: "Port 80 Attack — target HTTP service on Blue.",
+  dos_attack: "Denial of Service — stress target system.",
+
+  recon_additional_servers: "Recon of additional servers beyond Blue — discover network hosts.",
+  capture_destroy_data: "Search, capture, and delete selected data on Blue systems.",
+  deny_web_services: "Deny web services from Blue to external network.",
+
+  firewall_update: "Firewall Update — add/modify iptables rules to block traffic.",
+  intrusion_detection: "Intrusion Detection — monitor network interfaces for suspicious activity.",
+  system_hardening: "System Hardening — scan and verify system security configuration."
+};
+
+function updateDesc() {
+  const a = document.getElementById('attack').value;
+  const p = document.getElementById('purpose').value;
+  const d = document.getElementById('defense').value;
+  const t = `<b>Attack:</b> ${descriptions[a] || a}<br><b>Purpose:</b> ${descriptions[p] || p}<br><b>Defense:</b> ${descriptions[d] || d}`;
+  document.getElementById('descText').innerHTML = t;
+}
+document.querySelectorAll('#attack, #purpose, #defense').forEach(el => el.addEventListener('change', updateDesc));
+updateDesc();
+
+/* ---------- Simulation (POST /simulate + SSE stream) ---------- */
+let currentEventSource = null;
+
+function appendConsole(msg, type="info") {
+  const consoleEl = document.getElementById('console');
+  const span = document.createElement('span');
+  span.className = "console-" + type;
+  span.textContent = msg + "\n";
+  consoleEl.appendChild(span);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+document.getElementById('simulateBtn').addEventListener('click', async () => {
+  const consoleEl = document.getElementById('console');
+  consoleEl.textContent = "";
+  appendConsole("[Starting new run... connecting to server]", "info");
+
+  const payload = {
+    attack: document.getElementById('attack').value,
+    purpose: document.getElementById('purpose').value,
+    defense: document.getElementById('defense').value
+  };
+
+  try {
+    const res = await fetch('/simulate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      appendConsole(`[Error] simulate failed: ${res.status} ${txt}`, "error");
+      return;
+    }
+    const js = await res.json();
+    const run_id = js.run_id;
+    document.getElementById('currentRun').textContent = `Active run: ${run_id}`;
+    appendConsole(`[Run started: ${run_id}]`, "info");
+
+    if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+
+    const es = new EventSource(`/stream/${encodeURIComponent(run_id)}`);
+    currentEventSource = es;
+
+    es.onmessage = (evt) => {
+      if (evt.data === "[__RUN_COMPLETE__]") {
+        appendConsole("[Run complete]", "complete");
+        es.close();
+        currentEventSource = null;
+        fetchRunsList();
+        return;
+      }
+      let parsed;
+      try { parsed = JSON.parse(evt.data); } catch(e) { parsed = {type:"info", msg:evt.data}; }
+      const type = parsed.type || "info";
+      const msg = parsed.msg || evt.data;
+      appendConsole(msg, type);
+    };
+
+    es.onerror = (err) => {
+      appendConsole("[Stream error or closed]", "warn");
+      es.close();
+      currentEventSource = null;
+      fetchRunsList();
+    };
+
+  } catch (err) {
+    appendConsole(`[Client error] ${err}`, "error");
+  }
+});
+
+/* ---------- Logs page: server-side runs ---------- */
+async function fetchRunsList() {
+  try {
+    const res = await fetch('/logs');
+    if (!res.ok) { document.getElementById('serverRuns').textContent = "Failed to load runs."; return; }
+    const list = await res.json();
+    const container = document.getElementById('serverRuns');
+    container.innerHTML = "";
+    if (list.length === 0) { container.textContent = "No server runs found."; return; }
+    list.forEach(item => {
+      const btn = document.createElement('button');
+      btn.textContent = item.name + "  •  " + (new Date(item.mtime*1000)).toLocaleString();
+      btn.onclick = () => loadServerLog(item.name);
+      container.appendChild(btn);
+    });
+  } catch (err) {
+    document.getElementById('serverRuns').textContent = "Error fetching runs: " + err;
+  }
+}
+async function loadServerLog(filename) {
+  try {
+    const res = await fetch('/log?file=' + encodeURIComponent(filename));
+    if (!res.ok) {
+      document.getElementById('serverLog').textContent = "Failed to load log: " + res.statusText;
+      return;
+    }
+    const txt = await res.text();
+    document.getElementById('serverLog').textContent = txt;
+  } catch (err) {
+    document.getElementById('serverLog').textContent = "Error: " + err;
+  }
+}
+fetchRunsList();
+
+/* ---------- Local file open (client-side) ---------- */
+document.getElementById('localFile').addEventListener('change', (ev) => {
+  const f = ev.target.files[0];
+  if (!f) { document.getElementById('localLog').textContent = "No local file loaded."; return; }
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('localLog').textContent = reader.result; };
+  reader.readAsText(f);
+});
+</script>
+</body>
+</html>

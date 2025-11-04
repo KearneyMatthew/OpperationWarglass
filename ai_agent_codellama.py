@@ -7,6 +7,7 @@ CodeLlama interface using Ollama extracts JSON from AI outputs even if extra tex
 import subprocess
 import json
 import re
+import os
 
 MODEL_NAME = "codellama:7b-instruct"
 
@@ -90,28 +91,45 @@ def extract_first_json(output: str) -> str:
 
 def get_action_from_llm(prompt: str) -> dict:
     """
-    Calls local CodeLlama via Ollama CLI and return parsed JSON as a Python dict.
-    This should also handle extra text, line breaks, or explanation from the AI.
+    More robust wrapper to call Ollama / CodeLlama.
+    Uses Popen + communicate so we can kill the child cleanly and capture partial output on timeout.
+    Timeout controlled by LLM_TIMEOUT env var (seconds), default 200.
     """
+    LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "200"))
+
+    # Build the command exactly as before; keep same CLI form to minimize change risk.
+    cmd = ["ollama", "run", MODEL_NAME, prompt]
+
     try:
-        result = subprocess.run(
-            ["ollama", "run", MODEL_NAME, prompt],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=120
-        )
-        output = result.stdout.strip()
+        # Start process
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        try:
+            stdout, stderr = proc.communicate(timeout=LLM_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            # Kill and capture any partial output for debugging
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            stdout, stderr = proc.communicate(timeout=5)
+            # Provide partial output for diagnosis
+            raise RuntimeError(f"CodeLlama call timed out (after {LLM_TIMEOUT}s). Partial stdout:\n{stdout}\n\nPartial stderr:\n{stderr}")
+
+        # If process returned non-zero, surface stderr
+        if proc.returncode != 0:
+            raise RuntimeError(f"Error calling CodeLlama: returncode={proc.returncode}\nstderr:\n{stderr}")
+
+        output = (stdout or "").strip()
+        # Debug info (keeps your previous debug print)
         print(f"[DEBUG] LLM raw output:\n{output}")
 
-        # Extract first JSON object
+        # Extract first JSON object (reuse your helper)
         json_str = extract_first_json(output).strip()
 
-        # Try parsing JSON
         try:
             return json.loads(json_str)
         except json.JSONDecodeError:
-            # Repair initial parse if/when it fails
             repaired = _conservative_repair_text(json_str)
             try:
                 parsed = json.loads(repaired)
@@ -119,16 +137,15 @@ def get_action_from_llm(prompt: str) -> dict:
                 return parsed
             except json.JSONDecodeError as e:
                 raise RuntimeError(
-                    f"Invalid JSON returned by LLM.\nRaw:\n{json_str}\n\n"
-                    f"Repaired:\n{repaired}\n\nError: {e}"
+                    f"Invalid JSON returned by LLM.\nRaw:\n{json_str}\n\nRepaired:\n{repaired}\n\nError: {e}\n\nFull stdout:\n{stdout}\n\nFull stderr:\n{stderr}"
                 )
 
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("CodeLlama call timed out.")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error calling CodeLlama: {e.stderr}") from e
-    except ValueError as e:
-        raise RuntimeError(f"Failed to extract JSON from LLM output:\n{output}\n{str(e)}") from e
+    except RuntimeError:
+        # re-raise RuntimeErrors (timeouts, bad return codes, JSON errors)
+        raise
+    except Exception as e:
+        # Catch-all (unexpected errors)
+        raise RuntimeError(f"Unexpected error calling CodeLlama: {e}") from e
 
 
 #

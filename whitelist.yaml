@@ -15,6 +15,7 @@ tools:
           - "-sV"
           - "-sS"
           - "-A"
+          - "-sP"
         required: false
       - name: ports
         type: ports
@@ -59,6 +60,13 @@ tools:
   iptables:
     description: "Host firewall changes (defensive)."
     params:
+      - name: chain
+        type: enum
+        allowed:
+          - "INPUT"
+          - "OUTPUT"
+          - "FORWARD"
+        required: true
       - name: src
         type: ip
         required: true
@@ -68,12 +76,12 @@ tools:
           - "DROP"
           - "REJECT"
         required: true
-    template: "sudo iptables -A INPUT -s {src} -j {action}"
+    template: "sudo iptables -A {chain} -s {src} -j {action}"
     requires_approval: true
     notes: "Requires snapshot and manual approval."
 
   hydra:
-    description: "Password brute force Requires manual approval."
+    description: "Password brute force (requires manual approval)."
     params:
       - name: target
         type: ip
@@ -94,7 +102,57 @@ tools:
         required: false
     template: "hydra -l {username} -P {wordlist} -t 4 -V ssh://{target}"
     requires_approval: true
-    notes: "Snapshot MUST be taken by a manual before approval. Rate-limit enforcement required."
+    notes: "Snapshot MUST be taken manually before approval. Rate-limit enforcement required."
+
+  sudo_harden:
+    description: "Remove or restrict sudo privileges from a user (defensive)."
+    params:
+      - name: target
+        type: ip
+        required: true
+      - name: user
+        type: alnum
+        required: true
+      - name: action
+        type: enum
+        allowed:
+          - "remove_sudo"
+        required: true
+    template: "sudo deluser {user} sudo"
+    requires_approval: true
+    notes: "Powerful defensive action. Always require manual approval and snapshot before execution."
+
+  simulator:
+    description: "Simulation-only: outputs completion messages; no real actions."
+    params:
+      - name: target
+        type: ip
+        required: true
+      - name: filename
+        type: string
+        required: false
+      - name: port
+        type: int
+        required: false
+      - name: account
+        type: alnum
+        required: false
+      - name: user
+        type: alnum
+        required: false
+      - name: action
+        type: string
+        required: false
+      - name: result
+        type: enum
+        allowed: ["success","partial","failure","root","sudo","admin","user","guest","none","unknown"]
+        required: true
+      - name: message
+        type: string
+        required: true
+    template: "echo SIMULATION: {result} - {message}"
+    requires_approval: false
+    notes: "Outputs a message only. No destructive commands."
 
 # helper param types (informational)
 _param_types:

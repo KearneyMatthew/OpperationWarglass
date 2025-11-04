@@ -1,0 +1,181 @@
+# prompts.yaml
+# Defines an ordered list of stages and the prompt text that will be sent to the LLM
+# for each stage. Modify prompts or stage order as needed.
+# Grouped by attack type (SSH Brute Force, Port 80 Attack, DoS)
+# and operational purpose (Recon, Data Capture/Destruction, Denial, Privilege Checks, Defense).
+
+stages:
+
+  # Base Usage
+  - name: ping
+    prompt: >
+      You are an automated cyber agent operating inside a closed cyber range.
+      Reply with only a single valid JSON object and nothing else
+      (no explanations, no code fences, no extra text). Use double quotes only.
+      The JSON must follow this schema:
+      {"tool": "<tool name>", "params": { ... }}
+      Allowed tool values: nmap, ping, tcpdump, iptables, hydra, simulator.
+      The 'target' parameter must be a single IPv4 address (for example, 192.168.100.2).
+      Example valid response:
+      {"tool":"ping","params":{"target":"192.168.100.2","count":1}}
+
+  - name: nmap
+    prompt: >
+      You are an automated agent tasked with scanning the target for open ports and services.
+      Reply with only a single valid JSON object and nothing else (no explanations, no code fences, no text).
+      Use double quotes only.
+      The JSON must follow this schema:
+      {"tool": "<tool name>", "params": { ... }}
+      Allowed tool values: nmap, ping, tcpdump, iptables, hydra, simulator.
+      The 'target' parameter must be a single IPv4 address (e.g., 192.168.100.2).
+      Use only whitelisted flags (e.g., -sV, -sS, -A) defined in whitelist.yaml.
+      Example valid response:
+      {"tool":"nmap","params":{"target":"192.168.100.2","flags":"-sV"}}
+
+  - name: hydra
+    prompt: >
+      STAGE: HYDRA
+      You are simulating an SSH brute-force attempt against the target.
+      Reply with only a single valid JSON object and nothing else (no explanation, no code fences, no text).
+      The JSON must use double quotes only and match this schema:
+      {"tool":"hydra","params":{"target":"<ipv4>","username":"<username>","wordlist":"<allowed_path>","max_attempts":<int>}}
+      The 'target' must be a single IPv4 address (e.g., 192.168.100.2).
+      The 'username' must be provided; if not known, use "admin".
+      The 'wordlist' must be one of the allowed paths in whitelist.yaml (e.g., /usr/share/wordlists/rockyou.txt).
+      'max_attempts' should be between 1 and 1000.
+      Example valid response:
+      {"tool":"hydra","params":{"target":"192.168.100.2","username":"admin","wordlist":"/usr/share/wordlists/rockyou.txt","max_attempts":100}}
+
+  # Attack Category Stages
+  - name: ssh_bruteforce_variant
+    prompt: >
+      You are simulating an SSH brute-force operation using hydra.
+      Respond with a JSON object only (no explanations, no text, no code fences).
+      Schema:
+      {"tool":"hydra","params":{"target":"<ipv4>","username":"<username>","wordlist":"<path>","max_attempts":<int>}}
+      Use "hydra" as the tool.
+      Target must be a valid IPv4.
+      Select usernames likely to exist (e.g., root, admin, user).
+      Limit 'max_attempts' to a reasonable value under 500.
+      Example:
+      {"tool":"hydra","params":{"target":"192.168.60.2","username":"root","wordlist":"/usr/share/wordlists/rockyou.txt","max_attempts":250}}
+
+  - name: port80_attack
+    prompt: >
+      You are initiating an HTTP-based enumeration or injection attack on port 80.
+      Respond only with a valid JSON object (no extra text).
+      Schema:
+      {"tool":"nmap","params":{"target":"<ipv4>","flags":"<allowed_http_flags>"}}
+      Use "nmap" or "curl" (if allowed by whitelist.yaml) for reconnaissance of web services.
+      Include only safe, whitelisted flags such as -p 80, -sV, -A.
+      Example:
+      {"tool":"nmap","params":{"target":"192.168.60.3","flags":"-p 80 -sV"}}
+
+  - name: dos_attack
+    prompt: >
+      You are simulating a denial-of-service operation designed to stress a target system.
+      Respond only with a valid JSON object.
+      Schema:
+      {"tool":"<tool>","params":{"target":"<ipv4>","duration":<seconds>,"intensity":<1-10>}}
+      Allowed tool values: hping3, iptables (for defensive response), or ping (for load simulation).
+      Example:
+      {"tool":"hping3","params":{"target":"192.168.60.2","duration":60,"intensity":5}}
+
+  # Purpose Category Stages
+  - name: recon_additional_servers
+    prompt: >
+      PURPOSE: Recon of additional servers beyond Blue.
+      You are tasked with mapping the network to discover additional systems beyond the known Blue host.
+      Respond with only a single valid JSON object.
+      Schema:
+      {"tool":"nmap","params":{"target":"<ipv4/subnet>","flags":"-sP"}}
+      Example:
+      {"tool":"nmap","params":{"target":"192.168.60.0/24","flags":"-sP"}}
+
+  - name: capture_destroy_data
+    prompt: >
+      PURPOSE (SIMULATION ONLY): Capture and mark files for deletion.
+      THIS STAGE IS AN EXPLICIT SIMULATION-ONLY ALIAS and MUST return tool="simulator".
+      **Do NOT perform any real file operations.**
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","filename":"<string>","action":"capture_and_send","result":"<success|partial|failure>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","filename":"Super important information","action":"capture_and_send","result":"success","message":"simulated: file staged to red (no-op)"}}
+
+  - name: deny_web_services
+    prompt: >
+      PURPOSE (SIMULATION ONLY): Denial of web services.
+      THIS STAGE IS AN EXPLICIT SIMULATION-ONLY ALIAS and MUST return tool="simulator".
+      **Do NOT run iptables or service commands.**
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","port":80,"action":"block_incoming|block_outgoing|service_stop","result":"<success|partial|failure>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","port":80,"action":"block_incoming","result":"success","message":"simulated: port 80 blocked (no-op)"}}
+
+  - name: check_privileges
+    prompt: >
+      PURPOSE: Check account privileges.
+      Respond with only a single valid JSON object describing the account privileges (simulation-only).
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","user":"<username>","privilege_level":"<note>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","user":"admin","privilege_level":"sudo","message":"simulated: user has sudo privileges"}}
+
+  # Defense Stages
+  - name: firewall_update
+    prompt: >
+      STAGE: FIREWALL UPDATE
+      You are an automated cyber defense AI agent. Reply with only a single valid JSON object and nothing else.
+      Use double quotes only. The JSON must follow this schema:
+      {"tool":"iptables","params":{"action":"<action>","chain":"<chain>","rule":"<rule>"}}
+      THIS STAGE REQUIRES tool = "iptables". Do NOT return any other tool value.
+      Example valid response:
+      {"tool":"iptables","params":{"action":"add","chain":"INPUT","rule":"-p tcp --dport 22 -j DROP"}}
+
+  - name: intrusion_detection
+    prompt: >
+      STAGE: INTRUSION DETECTION
+      You are an automated cyber defense AI agent. Reply with only a single valid JSON object and nothing else.
+      Use double quotes only. The JSON must follow this schema:
+      {"tool":"tcpdump","params":{"interface":"<interface>","duration":<seconds>}}
+      THIS STAGE REQUIRES tool = "tcpdump". Do NOT return any other tool value.
+      Example valid response:
+      {"tool":"tcpdump","params":{"interface":"eth0","duration":60}}
+
+  - name: system_hardening
+    prompt: >
+      STAGE: SYSTEM HARDENING
+      You are an automated cyber defense AI agent. Reply with only a single valid JSON object and nothing else.
+      Use double quotes only. The JSON must follow this schema:
+      {"tool":"nmap","params":{"target":"<ipv4>","flags":"<allowed_flags>"}}
+      THIS STAGE REQUIRES tool = "nmap". Do NOT return any other tool value.
+      Example valid response:
+      {"tool":"nmap","params":{"target":"192.168.100.3","flags":"-sS"}}
+
+  - name: sudo_harden
+    prompt: >
+      STAGE: SUDO HARDEN / USER PRIVILEGE DESCALATION
+      You are an automated cyber defense AI agent. Reply with only a single valid JSON object.
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","user":"<username>","action":"harden_sudo","result":"<success|partial|failure>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","user":"admin","action":"harden_sudo","result":"success","message":"simulated: sudo rights reduced or locked (no-op)"}}
+
+  # Simulation Helper Stages
+  - name: capture_destroy_file_simulation
+    prompt: >
+      PURPOSE (SIMULATION ONLY): Simulate capturing and simulated removal of a named file.
+      **Do NOT perform any real file operations.**
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","filename":"<string>","result":"<success|partial|failure>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","filename":"Super important information","result":"success","message":"Simulated: file captured and deletion simulated"}}
+
+  - name: close_port80_simulation
+    prompt: >
+      PURPOSE (SIMULATION ONLY): Simulate closing or blocking HTTP (port 80).
+      **Do NOT run iptables or service commands.**
+      Schema:
+      {"tool":"simulator","params":{"target":"<ipv4>","port":80,"result":"<success|partial|failure>","message":"<note>"}}
+      Example:
+      {"tool":"simulator","params":{"target":"192.168.60.3","port":80,"result":"success","message":"Simulated: port 80 blocked (no-op)"}}
